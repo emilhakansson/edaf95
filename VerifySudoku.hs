@@ -3,38 +3,15 @@
 module Sudoku where
 
 import Data.Char
-import System.Random
-
-rows :: String
-rows = "ABCDEFGHI"
-
--- this way we only have to change the 'rows' variable to change the size of the board.
-cols :: String
-cols = (concat . map show) [1..(length rows)]
-
-size :: Int
-size = length rows
-
--- gets us the dimensions of each box as an integer (assuming 'size' is a square number)
-boxSize :: Int
-boxSize = (floor . sqrt . fromIntegral) size
 
 -- helper function. splits a string at every n characters, then puts the substrings in a list.
 -- used in order to calculate the boxes for the unitList function, depending on the boxSize.
 -- example: 'split 3 "ABCDEFGHI"' returns ["ABC", "DEF", "GHI"]
-splitEvery ::  Int -> [a] -> [[a]]
+splitEvery ::  Int -> String -> [String]
 splitEvery n [] = []
-splitEvery n xs
-  | length xs <= n = [xs]
-  | otherwise = take n xs : splitEvery n (drop n xs)
-
--- either ["AB", "CD"] for a 4x4 board, or ["ABC", "DEF", "GHI"] for a 9x9 board.
-boxRows :: [String]
-boxRows = splitEvery boxSize rows
-
--- either ["12", "34"] for a 4x4 board, or ["123", "456", "789"] for a 9x9 board.
-boxCols :: [String]
-boxCols = splitEvery boxSize cols
+splitEvery n str
+  | length str <= n = [str]
+  | otherwise = take n str : splitEvery n (drop n str)
 
 containsElem :: Eq a => a ->  [a] -> Bool
 containsElem _ [] = False
@@ -51,35 +28,44 @@ replacePointsWithZeros :: String -> String
 replacePointsWithZeros = map (\c -> if c == '.' then '0' else c)
 
 -- a list of every square in the sudoku board, represented as strings
-squareStrings :: [String]
-squareStrings = cross rows cols
+squareStrings :: Int -> [String]
+squareStrings size = cross rows_ cols_ where
+    rows_ = take size "ABCDEFGHI"
+    cols_ = take size "123456789"
 
 -- takes the String input and converts it into a sudoku board list
 -- 1: replacePointsWithZeros in the input string.
 -- 2: convert digits to Ints (map digitToInt)
--- 3: zip squareStrings with the resulting list
--- the result is a list of tuples, where the n:th square string 
--- is paired with the n:th digit in the input string.
+-- 3: zip sqStrings with the resulting list
+-- the result is a list of tuples, where the n:th square string is paired with the n:th digit in the input string.
 parseBoard :: String -> [(String, Int)]
-parseBoard str = zip squareStrings (map digitToInt (replacePointsWithZeros str))
+parseBoard str = zip sqStrings (map digitToInt (replacePointsWithZeros str)) where
+  sqStrings = cross rows_ cols_
+  rows_ = take ((floor . sqrt . fromIntegral . length) str) "ABCDEFGHI"
+  cols_ = (concat . map show) [1..(length rows_)]
 
 -- a list of lists, where each list is composed of all squares in a row, column, or box in the board.
-unitList :: [[String]]
-unitList = 
+unitList :: Int -> [[String]]
+unitList size = 
   [ cross [r] cols | r <- rows ] ++
   [ cross rows [c] | c <- cols ] ++
-  [ cross xs ys | xs <- boxRows, ys <- boxCols ]
+  [ cross xs ys | xs <- boxRows, ys <- boxCols ] where
+    rows = take size "ABCDEFGHI"
+    cols = take size "123456789"
+    boxRows = splitEvery boxSize rows
+    boxCols = splitEvery boxSize cols
+    boxSize = (floor . sqrt . fromIntegral) size
 
 -- retrieves the unit list for a given square string
 -- the unit list is a list of the row, column and box that the square belongs to.
 -- each row, column or box is itself a list of strings.
-filterUnitList :: String -> [[String]]
-filterUnitList sq = filter (containsElem sq) unitList
+filterUnitList :: Int -> String -> [[String]]
+filterUnitList size sq = filter (containsElem sq) (unitList size)
 
 -- every unit list of every square string, contained as pairs in a list.
 -- A row, column, or box contains the squares in that unit, represented by square strings.
-units :: [(String, [[String]])]
-units = zip squareStrings (map filterUnitList squareStrings)
+units :: Int -> [(String, [[String]])]
+units size = zip (squareStrings size) (map (\sq -> filterUnitList size sq) (squareStrings size))
 
 -- apply (++) to each element in the list from left to right, concatenating them to the empty list [].
 foldList :: [[a]] -> [a]
@@ -95,12 +81,13 @@ removeDuplicates (x:xs)
   | containsElem x xs = removeDuplicates xs
   | otherwise = x : removeDuplicates xs
 
--- takes as input the list of units, i.e. every pair of square strings and its unit list
+-- takes as input an Int representing the dimensions of the board, then calculates the list of units, 
+-- i.e. every pair of square strings and its unit list.
 -- for every unit list, it folds ("flattens") that list, removes duplicates, then filters any string in the unit list
 -- that is the same as the square itself.
--- the result is a list of tuples, where the first element of the pair is a square, and the second is a list of its peers.
-peers :: [(String, [String])]
-peers = map (\(sq, p) -> (sq, (filter (/= sq) . removeDuplicates . foldList) p)) units
+-- the result is a list of tuples, where the first element of the tuple is a square, and the second is a list of its peers.
+peers :: Int -> [(String, [String])]
+peers size = map (\(sq, p) -> (sq, (filter (/= sq) . removeDuplicates . foldList) p)) (units size)
 
 -- Lab 2:
 
@@ -112,8 +99,8 @@ fromMaybe defaultVal maybeVal =
 
 -- if the string is not contained in peers, return an empty list.
 -- otherwise, we simply use lookup to find sq's corresponding peers.
-getPeers :: String -> [String]
-getPeers sq = fromMaybe [] (lookup sq peers)
+getPeers :: Int -> String -> [String]
+getPeers size sq = fromMaybe [] (lookup sq (peers size))
 
 -- using recursion:
 -- if the list is empty, return an empty list.
@@ -167,15 +154,16 @@ reduceList xs ys = filter (\x -> not (elem x ys)) xs
 -- to remove those peer values. Finally, return a tuple with the square and the resulting list.
 validSquareNumbers :: (String, Int) -> [(String, Int)] -> (String, [Int])
 validSquareNumbers (sq, n) board
-  | n == 0 = (sq, reduceList [1..size] (lookups (getPeers sq) board))
-  | otherwise = (sq, [n])
+  | n == 0 = (sq, reduceList [1..size] (lookups (getPeers size sq) board))
+  | otherwise = (sq, [n]) where
+    size = (floor . sqrt . fromIntegral . length) board
 
 -- maps the validSquareNumbers function to every square on the board.
 -- the result is a list of tuples, where every tuple contains the square string, and a list of its valid numbers.
 validBoardNumbers :: [(String, Int)] -> [(String, [Int])]
 validBoardNumbers board = map (\(sq, n) -> validSquareNumbers (sq, n) board) board
 
--- helper function, checks if there are any elements xs in the validBoardNumbers for 
+-- helper function. checks if there are any elements xs in the validBoardNumbers for 
 -- the unit which are of length 1 (i.e. there is only one valid number for that square) and 
 -- which occur more than once (i.e. there are two squares conflicting over this number)
 containsNoSingleDuplicates :: [String] ->  [(String, [Int])] -> Bool
@@ -186,77 +174,19 @@ containsNoSingleDuplicates unit board = (length . removeDuplicates) xss == lengt
 -- by concatenating the validBoardNumbers and checking if every number [1..4] is contained in that list.
 -- We also check that there are no single-element duplicate lists, i.e. direct conflicts.
 validUnit :: [String] -> [(String, [Int])] -> Bool
-validUnit unit board = containsNoSingleDuplicates unit board && all (\x -> elem x (concat (lookups unit board))) [1..size]
+validUnit unit board = containsNoSingleDuplicates unit board && all (\x -> elem x (concat (lookups unit board))) [1..size] where
+    size = (floor . sqrt . fromIntegral . length) board
 
 -- to check if every unit is valid, we can simply apply the validUnit function to every unit in the unitList,
 -- and return true iff. all units are valid for a given board.
 validUnits :: [(String, [Int])] -> Bool
-validUnits board = all (\x -> validUnit x board) unitList
+validUnits board = all (\x -> validUnit x board) (unitList size) where
+    size = (floor . sqrt . fromIntegral . length) board
 
 -- to verify a sudoku string, we simply parse the string into a board and apply 
 -- the validBoardNumbers and validUnits functions.
 verifySudoku :: String -> Bool
 verifySudoku = validUnits . validBoardNumbers . parseBoard
-
--- Lab 3
-
-giveMeANumber :: IO ()
-giveMeANumber = do 
-  lowerStr <- getLine
-  upperStr <- getLine
-  let lower = read lowerStr :: Int
-  let upper = read upperStr :: Int
-  rnd <- randomRIO (lower, upper)
-  putStrLn (show rnd)
-
--- helper function. returns the number of elements 'x' in xs.
-count :: Eq a => a -> [a] -> Int
-count x = length . filter (== x)
-
--- helper function. takes a unit of (square, val)-tuples as input, returns the squares that have direct conflicts (i.e. the same val)
--- 0 is considered an empty square, and so is omitted.
-unitConflicts :: [(String, Int)] -> [String]
-unitConflicts unit = map fst (filter (\(sq, val) -> (count val (map snd unit)) > 1 && val /= 0) unit)
-
--- helper function. gets the (square, val) pairs in a given unit from a given board, essentially
--- a "lookups" for tuples.
-filterUnit :: [String] -> [(String, Int)] -> [(String, Int)]
-filterUnit unit board = filter (\(sq, val) -> sq `elem` unit) board
-
--- helper function. for a given board, assembles a list of lists, where every sub-list is a collection of
--- (square, val) tuples, representing a unit.
-unitVals :: [(String, Int)] -> [[(String, Int)]]
-unitVals board = map (\u -> (filterUnit u board)) unitList
-
--- finally, we apply the unitConflicts function over every sub-list in unitVals.
--- concatenating this gives us a list of every conflicting square on the board.
-boardConflicts :: [(String, Int)] -> [String]
-boardConflicts board = concat (map unitConflicts (unitVals board))
-
--- prints a sudoku board row by row into a table-like structure.
--- first calculates the dimensions ('size') of the board, 
--- then converts the values into strings and splits them into chunks (rows) of length 'size'.
--- finally, prints each row line by line.
-printSudoku :: [(String, Int)] -> IO ()
-printSudoku board = do
-  let size =  (floor . sqrt . fromIntegral . length) board
-      boxSize = (floor . sqrt . fromIntegral) size
-      vals = map snd board
-      rows = map (concatMap show) (splitEvery size vals)
-
-      validNbrs = validBoardNumbers board
-      blockedSquares = map fst blockedTuples where
-        blockedTuples = filter (\(sq, values) -> (all (\v -> v `elem` (lookups (getPeers sq) board))) values) validNbrs
-
-      blockedUnits = filter (\u -> not (validUnit u validNbrs)) unitList
-      
-  putStrLn "---------"
-  mapM_ putStrLn rows
-  if blockedSquares == [] then
-    putStrLn "Conflicting or blocked squares: None found" else putStrLn ("Conflicting or blocked squares: " ++ (show blockedSquares))
-  if blockedUnits == [] then
-    putStrLn "Conflicting units: None found" else putStrLn ("Conflicting or blocked units: " ++ (show blockedUnits))
-  
 
 -- helper function to parse sudokus from file input. 
 -- splits a string at a given Char separator and returns a list of every String
@@ -269,12 +199,13 @@ splitString sep (x:xs)
 
 main :: IO ()
 main = do
-    file <- readFile "easy50.txt"
+    file <- readFile "mixed.txt"
     let raw = (filter (/= '\n') file)
         sudokuList = filter (/= "") (splitString '=' raw)
-        sudokuBoards = map parseBoard sudokuList
+        size =  (floor . sqrt . fromIntegral . length . head) sudokuList
+        rows = take size "ABCDEFGHI"
+        cols = take size "123456789"
 
         verified = map (show . verifySudoku) sudokuList
 
     mapM_ putStrLn verified
-    mapM_ printSudoku sudokuBoards
