@@ -3,10 +3,10 @@
 module Sudoku where
 
 import Data.Char
-import System.Random
+--import System.Random
 
 rows :: String
-rows = "ABCD"
+rows = "ABCDEFGHI"
 
 -- this way we only have to change the 'rows' variable to change the size of the board.
 cols :: String
@@ -54,6 +54,9 @@ replacePointsWithZeros = map (\c -> if c == '.' then '0' else c)
 squareStrings :: [String]
 squareStrings = cross rows cols
 
+squareStringsOf :: String -> String -> [String]
+squareStringsOf rows_ cols_ = cross rows_ cols_
+
 -- takes the String input and converts it into a sudoku board list
 -- 1: replacePointsWithZeros in the input string.
 -- 2: convert digits to Ints (map digitToInt)
@@ -78,16 +81,31 @@ unitList =
   [ cross rows [c] | c <- cols ] ++
   [ cross xs ys | xs <- boxRows, ys <- boxCols ]
 
+-- same as unitList, but calculates the unit list based on input rows and cols strings instead of a fixed constant.
+unitListOf :: String -> String -> [[String]]
+unitListOf rows_ cols_ = 
+  [cross [r] cols_ | r <- rows_ ] ++
+  [cross rows_ [c] | c <- cols_ ] ++
+  [ cross xs ys | xs <- boxRows_, ys <- boxCols_] where
+    boxRows_ = splitN ((floor . sqrt . fromIntegral . length) rows_) rows_
+    boxCols_ = splitN ((floor . sqrt . fromIntegral . length) cols_) cols_
+
 -- retrieves the unit list for a given square string
 -- the unit list is a list of the row, column and box that the square belongs to.
 -- each row, column or box is itself a list of strings.
 filterUnitList :: String -> [[String]]
 filterUnitList sq = filter (containsElem sq) unitList
 
+filterUnitListOf :: String -> [[String]] -> [[String]]
+filterUnitListOf sq units_ = filter (containsElem sq) units_
+
 -- every unit list of every square string, contained as pairs in a list.
 -- A row, column, or box contains the squares in that unit, represented by square strings.
 units :: [(String, [[String]])]
 units = zip squareStrings (map filterUnitList squareStrings)
+
+--unitsOf :: String -> String -> [(String, [[String]])]
+--unitsOf rows_ cols_ = zip (squareStringsOf rows cols) (map (filterUnitListOf ) (squareStringsOf rows cols))
 
 -- apply (++) to each element in the list from left to right, concatenating them to the empty list [].
 foldList :: [[a]] -> [a]
@@ -138,11 +156,6 @@ justifyList (Nothing:xs) = justifyList xs
 lookups :: Eq a => [a] -> [(a, b)] -> [b]
 lookups xs ys = justifyList (map (\x -> lookup x ys) xs)
 
--- to verify a sudoku string, we simply parse the string into a board and apply 
--- the validBoardNumbers and validUnits functions.
-verifySudoku :: String -> Bool
-verifySudoku = validUnits . validBoardNumbers . parseBoard2
-
 consistentSudoku :: String
 consistentSudoku   = ".1....2.1.3...1."
 -- .1..
@@ -191,26 +204,42 @@ validSquareNumbers (sq, n) board
 validBoardNumbers :: [(String, Int)] -> [(String, [Int])]
 validBoardNumbers board = map (\(sq, n) -> validSquareNumbers (sq, n) board) board
 
--- helper function, checks if there are any elements xs in the validBoardNumbers for 
+-- helper function. checks if there are any elements xs in the validBoardNumbers for 
 -- the unit which are of length 1 (i.e. there is only one valid number for that square) and 
 -- which occur more than once (i.e. there are two squares conflicting over this number)
 containsNoSingleDuplicates :: [String] ->  [(String, [Int])] -> Bool
 containsNoSingleDuplicates unit board = (length . removeDuplicates) xss == length xss where
   xss = filter (\xs -> length xs == 1) (lookups unit board)
 
+-- helper function. checks if *all* the possible values for a square are contained in any of the non-zero (filled in) peers.
+-- if so, it is blocked and the function returns false.
+isNonBlockedSquare :: String -> [(String, [Int])] -> Bool
+isNonBlockedSquare sq board = all (\v -> v `elem` peerValues) validValues where
+  validValues = filter (/= 0) (fromMaybe [] (lookup sq board))
+  peerValues =  (filter (/= 0) . removeDuplicates . concat) (lookups (getPeers sq) board)
+
+-- helper function. checks if all the given unit squares fulfill the non-blocked condition for a given board.
+isNonBlockedUnit :: [String] -> [(String, [Int])] -> Bool
+isNonBlockedUnit unit board = all (\sq -> isNonBlockedSquare sq board) unit
+
 -- we can check if there is a possibility to insert every number in at least one square,
 -- by concatenating the validBoardNumbers and checking if every number ([1..4] / [1..9]) is contained in that list.
 -- We also check that there are no single-element duplicate lists, i.e. direct conflicts.
 validUnit :: [String] -> [(String, [Int])] -> Bool
-validUnit unit board = containsNoSingleDuplicates unit board && all (\x -> elem x (concat (lookups unit board))) [1..size]
+validUnit unit board = containsNoSingleDuplicates unit board && isNonBlockedUnit unit board
 
 -- to check if every unit is valid, we can simply apply the validUnit function to every unit in the unitList,
 -- and return true iff. all units are valid for a given board.
 validUnits :: [(String, [Int])] -> Bool
 validUnits board = all (\x -> validUnit x board) unitList
 
--- Lab 3
+-- to verify a sudoku string, we simply parse the string into a board and apply 
+-- the validBoardNumbers and validUnits functions.
+verifySudoku :: String -> Bool
+verifySudoku = validUnits . validBoardNumbers . parseBoard
 
+-- Lab 3
+{-
 giveMeANumber :: IO ()
 giveMeANumber = do 
   lowerStr <- getLine
@@ -219,6 +248,7 @@ giveMeANumber = do
   let upper = read upperStr :: Int
   rnd <- randomRIO (lower, upper)
   putStrLn (show rnd)
+-}
 
 -- helper function. returns the number of elements 'x' in xs.
 count :: Eq a => a -> [a] -> Int
@@ -262,6 +292,7 @@ printSudoku board = do
     putStrLn "Blocked squares: None" else putStrLn ("Blocked squares: " ++ (show blockings))
   if conflicts == [] then
     putStrLn "Conflicting squares: None" else putStrLn ("Conflicting squares: " ++ (show conflicts))
+  
 
 splitString :: Char -> String -> [String]
 splitString sep [] = [""]
@@ -273,18 +304,17 @@ main :: IO ()
 main = do
   file <- readFile "easy50.txt"
   let raw = (filter (/= '\n') file)
-  let list = filter (/= "") (splitString '=' raw)
+  let sudokuList = filter (/= "") (splitString '=' raw)
 
-  let size = (floor . sqrt . fromIntegral . length . head) list
+  let size = (floor . sqrt . fromIntegral . length . head) sudokuList
   let rows_ = take size "ABCDEFGHI"
   let cols_ = (concat . map show) [1..size]
   let boxSize_ = (floor . sqrt . fromIntegral) size
   let boxRows_ = splitN boxSize_ rows_
   let boxCols_ = splitN boxSize_ cols_
-  let unitList_ = [ cross [r] cols_ | r <- rows_ ] ++ [ cross rows_ [c] | c <- cols_ ] ++ [ cross xs ys | xs <- boxRows_, ys <- boxCols_ ]
-  let filterUnitList sq = filter (containsElem sq) unitList
+  let unitList_ = unitListOf rows_ cols_
+  let filterUnitList sq = filter (containsElem sq) unitList_
 
+  let verified = map verifySudoku sudokuList
 
-  let verified = map verifySudoku list
-
-  mapM_ (\b -> printSudoku b) (map parseBoard2 list)
+  mapM_ (\b -> putStrLn b) (map show verified)
