@@ -4,6 +4,17 @@ module Sudoku where
 
 import Data.Char
 
+-- How to run:
+-- 1. Change the constant "testFile" to change which file should be verified. (easy50.txt, inconsistent20.txt, conflicts.txt, blockings.txt)
+-- 2. run 'ghci'
+-- 3. Load the module: ':load VerifySudoku.hs'
+-- 4. run the main function: 'main'
+
+-- change this to change which file to verify.
+testFile :: String
+testFile = "easy50.txt"
+
+
 -- helper function. splits a string at every n characters, then puts the substrings in a list.
 -- used in order to calculate the boxes for the unitList function, depending on the boxSize.
 -- example: 'split 3 "ABCDEFGHI"' returns ["ABC", "DEF", "GHI"]
@@ -38,6 +49,7 @@ squareStrings size = cross rows_ cols_ where
 -- 2: convert digits to Ints (map digitToInt)
 -- 3: zip sqStrings with the resulting list
 -- the result is a list of tuples, where the n:th square string is paired with the n:th digit in the input string.
+-- works for variable sizes of sudoku boards, up to 9x9.
 parseBoard :: String -> [(String, Int)]
 parseBoard str = zip sqStrings (map digitToInt (replacePointsWithZeros str)) where
   sqStrings = cross rows_ cols_
@@ -171,7 +183,7 @@ containsNoSingleDuplicates unit board = (length . removeDuplicates) xss == lengt
   xss = filter (\xs -> length xs == 1) (lookups unit board)
 
 -- we can check if there is a possibility to insert every number in at least one square,
--- by concatenating the validBoardNumbers and checking if every number [1..4] is contained in that list.
+-- by concatenating the validBoardNumbers and checking if every number [1..size] is contained in that list.
 -- We also check that there are no single-element duplicate lists, i.e. direct conflicts.
 validUnit :: [String] -> [(String, [Int])] -> Bool
 validUnit unit board = containsNoSingleDuplicates unit board && all (\x -> elem x (concat (lookups unit board))) [1..size] where
@@ -199,12 +211,9 @@ splitString sep (x:xs)
 
 main :: IO ()
 main = do
-    file <- readFile "mixed.txt"
+    file <- readFile testFile
     let raw = (filter (/= '\n') file)
         sudokuList = filter (/= "") (splitString '=' raw)
-        size =  (floor . sqrt . fromIntegral . length . head) sudokuList
-        rows = take size "ABCDEFGHI"
-        cols = take size "123456789"
 
         verified = map (show . verifySudoku) sudokuList
 
