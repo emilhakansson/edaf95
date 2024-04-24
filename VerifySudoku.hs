@@ -24,6 +24,9 @@ splitEvery n str
   | length str <= n = [str]
   | otherwise = take n str : splitEvery n (drop n str)
 
+sqrtInt :: Int -> Int
+sqrtInt = floor . sqrt . fromIntegral
+
 containsElem :: Eq a => a ->  [a] -> Bool
 containsElem _ [] = False
 containsElem e (x:xs)
@@ -54,8 +57,8 @@ squareStrings size = cross rows_ cols_ where
 parseBoard :: String -> [(String, Int)]
 parseBoard str = zip sqStrings (map digitToInt (replacePointsWithZeros str)) where
   sqStrings = cross rows_ cols_
-  rows_ = take ((floor . sqrt . fromIntegral . length) str) "ABCDEFGHI"
-  cols_ = take ((floor . sqrt . fromIntegral . length) str) "123456789"
+  rows_ = take ((sqrtInt . length) str) "ABCDEFGHI"
+  cols_ = take ((sqrtInt . length) str) "123456789"
 
 -- a list of lists, where each list is composed of all squares in a row, column, or box in the board.
 unitList :: Int -> [[String]]
@@ -67,7 +70,7 @@ unitList size =
     cols = take size "123456789"
     boxRows = splitEvery boxSize rows
     boxCols = splitEvery boxSize cols
-    boxSize = (floor . sqrt . fromIntegral) size
+    boxSize = (sqrtInt) size
 
 -- retrieves the unit list for a given square string
 -- the unit list is a list of the row, column and box that the square belongs to.
@@ -165,7 +168,7 @@ validSquareNumbers :: (String, Int) -> [(String, Int)] -> (String, [Int])
 validSquareNumbers (sq, n) board
   | n == 0 = (sq, reduceList [1..size] (lookups (getPeers size sq) board))
   | otherwise = (sq, [n]) where
-    size = (floor . sqrt . fromIntegral . length) board
+    size = (sqrtInt . length) board
 
 -- maps the validSquareNumbers function to every square on the board.
 -- the result is a list of tuples, where every tuple contains the square string, and a list of its valid numbers.
@@ -184,13 +187,13 @@ containsNoSingleDuplicates unit board = (length . removeDuplicates) xss == lengt
 -- We also check that there are no single-element duplicate lists, i.e. direct conflicts.
 validUnit :: [String] -> [(String, [Int])] -> Bool
 validUnit unit board = containsNoSingleDuplicates unit board && all (`elem` (concat (lookups unit board))) [1..size] where
-    size = (floor . sqrt . fromIntegral . length) board
+    size = (sqrtInt . length) board
 
 -- to check if every unit is valid, we can simply apply the validUnit function to every unit in the unitList,
 -- and return true iff. all units are valid for a given board.
 validUnits :: [(String, [Int])] -> Bool
 validUnits board = all (`validUnit` board) (unitList size) where
-    size = (floor . sqrt . fromIntegral . length) board
+    size = (sqrtInt . length) board
 
 -- to verify a sudoku string, we simply parse the string into a board and apply 
 -- the validBoardNumbers and validUnits functions.
