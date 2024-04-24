@@ -1,4 +1,4 @@
--- Author: Emil Håkansson
+-- Author: Emil Håkansson, Felicia Hyunh
 
 module Sudoku where
 
@@ -39,6 +39,7 @@ replacePointsWithZeros :: String -> String
 replacePointsWithZeros = map (\c -> if c == '.' then '0' else c)
 
 -- a list of every square in the sudoku board, represented as strings
+-- takes as input the size/dimensions of the board. works for up to 9x9 boards
 squareStrings :: Int -> [String]
 squareStrings size = cross rows_ cols_ where
     rows_ = take size "ABCDEFGHI"
@@ -54,7 +55,7 @@ parseBoard :: String -> [(String, Int)]
 parseBoard str = zip sqStrings (map digitToInt (replacePointsWithZeros str)) where
   sqStrings = cross rows_ cols_
   rows_ = take ((floor . sqrt . fromIntegral . length) str) "ABCDEFGHI"
-  cols_ = (concat . map show) [1..(length rows_)]
+  cols_ = take ((floor . sqrt . fromIntegral . length) str) "123456789"
 
 -- a list of lists, where each list is composed of all squares in a row, column, or box in the board.
 unitList :: Int -> [[String]]
@@ -77,11 +78,7 @@ filterUnitList size sq = filter (containsElem sq) (unitList size)
 -- every unit list of every square string, contained as pairs in a list.
 -- A row, column, or box contains the squares in that unit, represented by square strings.
 units :: Int -> [(String, [[String]])]
-units size = zip (squareStrings size) (map (\sq -> filterUnitList size sq) (squareStrings size))
-
--- apply (++) to each element in the list from left to right, concatenating them to the empty list [].
-foldList :: [[a]] -> [a]
-foldList = foldr (++) []
+units size = zip (squareStrings size) (map (filterUnitList size) (squareStrings size))
 
 -- base case: if the list is empty, the result is an empty list.
 -- otherwise, we divide the list into its head and tail.
@@ -99,7 +96,7 @@ removeDuplicates (x:xs)
 -- that is the same as the square itself.
 -- the result is a list of tuples, where the first element of the tuple is a square, and the second is a list of its peers.
 peers :: Int -> [(String, [String])]
-peers size = map (\(sq, p) -> (sq, (filter (/= sq) . removeDuplicates . foldList) p)) (units size)
+peers size = map (\(sq, p) -> (sq, (filter (/= sq) . removeDuplicates . concat) p)) (units size)
 
 -- Lab 2:
 
@@ -127,7 +124,7 @@ justifyList (Nothing:xs) = justifyList xs
 -- the result is a list of Just- and Nothing-values, so we apply justifyList to the result to 
 -- extract only the values themselves.
 lookups :: Eq a => [a] -> [(a, b)] -> [b]
-lookups xs ys = justifyList (map (\x -> lookup x ys) xs)
+lookups xs ys = justifyList (map (`lookup` ys) xs)
 
 consistentSudoku :: String
 consistentSudoku   = ".1....2.1.3...1."
@@ -158,7 +155,7 @@ inconsistentSudoku3 = "1234000030420100"
 
 -- filters the elements contained in ys from xs, i.e. return xs with all elements from ys removed.
 reduceList :: Eq a => [a] -> [a] -> [a]
-reduceList xs ys = filter (\x -> not (elem x ys)) xs
+reduceList xs ys = filter (`notElem` ys) xs
 
 -- if the square is not filled, we use the same idea as before:
 -- use lookups to get the values of every peer square.
@@ -186,13 +183,13 @@ containsNoSingleDuplicates unit board = (length . removeDuplicates) xss == lengt
 -- by concatenating the validBoardNumbers and checking if every number [1..size] is contained in that list.
 -- We also check that there are no single-element duplicate lists, i.e. direct conflicts.
 validUnit :: [String] -> [(String, [Int])] -> Bool
-validUnit unit board = containsNoSingleDuplicates unit board && all (\x -> elem x (concat (lookups unit board))) [1..size] where
+validUnit unit board = containsNoSingleDuplicates unit board && all (`elem` (concat (lookups unit board))) [1..size] where
     size = (floor . sqrt . fromIntegral . length) board
 
 -- to check if every unit is valid, we can simply apply the validUnit function to every unit in the unitList,
 -- and return true iff. all units are valid for a given board.
 validUnits :: [(String, [Int])] -> Bool
-validUnits board = all (\x -> validUnit x board) (unitList size) where
+validUnits board = all (`validUnit` board) (unitList size) where
     size = (floor . sqrt . fromIntegral . length) board
 
 -- to verify a sudoku string, we simply parse the string into a board and apply 
@@ -206,13 +203,13 @@ verifySudoku = validUnits . validBoardNumbers . parseBoard
 splitString :: Char -> String -> [String]
 splitString sep [] = [""]
 splitString sep (x:xs)
-  | x == sep = "" : (splitString sep xs)
+  | x == sep = "" : splitString sep xs
   | otherwise = (x : head (splitString sep xs)) : tail (splitString sep xs)
 
 main :: IO ()
 main = do
     file <- readFile testFile
-    let raw = (filter (/= '\n') file)
+    let raw = filter (/= '\n') file
         sudokuList = filter (/= "") (splitString '=' raw)
 
         verified = map (show . verifySudoku) sudokuList
