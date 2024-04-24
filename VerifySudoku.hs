@@ -1,4 +1,4 @@
--- Author: Emil Håkansson, Felicia Hyunh
+-- Author: Emil Håkansson, Felicia Huynh
 
 module Sudoku where
 
@@ -14,10 +14,12 @@ import Data.Char
 testFile :: String
 testFile = "easy50.txt"
 
+rowString = "ABCDEFGHI"
+colString = "123456789"
 
 -- helper function. splits a string at every n characters, then puts the substrings in a list.
 -- used in order to calculate the boxes for the unitList function, depending on the boxSize.
--- example: 'split 3 "ABCDEFGHI"' returns ["ABC", "DEF", "GHI"]
+-- example: 'split 3 rowString' returns ["ABC", "DEF", "GHI"]
 splitEvery ::  Int -> String -> [String]
 splitEvery n [] = []
 splitEvery n str
@@ -45,8 +47,8 @@ replacePointsWithZeros = map (\c -> if c == '.' then '0' else c)
 -- takes as input the size/dimensions of the board. works for up to 9x9 boards
 squareStrings :: Int -> [String]
 squareStrings size = cross rows_ cols_ where
-    rows_ = take size "ABCDEFGHI"
-    cols_ = take size "123456789"
+    rows_ = take size rowString
+    cols_ = take size colString
 
 -- takes the String input and converts it into a sudoku board list
 -- 1: replacePointsWithZeros in the input string.
@@ -57,8 +59,8 @@ squareStrings size = cross rows_ cols_ where
 parseBoard :: String -> [(String, Int)]
 parseBoard str = zip sqStrings (map digitToInt (replacePointsWithZeros str)) where
   sqStrings = cross rows_ cols_
-  rows_ = take ((sqrtInt . length) str) "ABCDEFGHI"
-  cols_ = take ((sqrtInt . length) str) "123456789"
+  rows_ = take ((sqrtInt . length) str) rowString
+  cols_ = take ((sqrtInt . length) str) colString
 
 -- a list of lists, where each list is composed of all squares in a row, column, or box in the board.
 unitList :: Int -> [[String]]
@@ -66,8 +68,8 @@ unitList size =
   [ cross [r] cols | r <- rows ] ++
   [ cross rows [c] | c <- cols ] ++
   [ cross xs ys | xs <- boxRows, ys <- boxCols ] where
-    rows = take size "ABCDEFGHI"
-    cols = take size "123456789"
+    rows = take size rowString
+    cols = take size colString
     boxRows = splitEvery boxSize rows
     boxCols = splitEvery boxSize cols
     boxSize = (sqrtInt) size
