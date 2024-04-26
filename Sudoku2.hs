@@ -231,13 +231,17 @@ printSudoku board = do
       rows = map (concatMap show) (splitEvery size vals)
       delimiters = map (splitEvery boxSize) rows
       prettyRows = map (\xs -> concatMap (++ "|") (init xs) ++ last xs) delimiters
+      prettierRows = zipWith (++) (map ((++ "  ") . show) [1..size]) prettyRows
 
       validNbrs = validBoardNumbers board
       conflicts = conflictingSquares board
-
       blockedUnits = filter (\u -> not (validUnit u validNbrs)) (unitList size)
-  putStrLn "---------"
-  mapM_ putStrLn prettyRows
+
+      
+
+  putStrLn "---------------"
+  putStrLn ("   " ++ (concatMap (++ " ") (splitEvery boxSize (take size "ABCDEFGHI"))))
+  mapM_ putStrLn prettierRows
   if conflicts /= [] then
     putStrLn ("Conflicting squares: " ++ (show conflicts)) else return ()
   if blockedUnits /= [] then
