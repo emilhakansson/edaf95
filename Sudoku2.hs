@@ -5,9 +5,6 @@ module Sudoku where
 import Data.Char
 --import System.Random
 
-testFile :: String
-testFile = "inconsistent20.txt"
-
 rowString = "ABCDEFGHI"
 colString = "123456789"
 
@@ -66,7 +63,7 @@ unitList size =
     cols = take size colString
     boxRows = splitEvery boxSize rows
     boxCols = splitEvery boxSize cols
-    boxSize = (sqrtInt) size
+    boxSize = sqrtInt size
 
 -- retrieves the unit list for a given square string
 -- the unit list is a list of the row, column and box that the square belongs to.
@@ -176,14 +173,15 @@ validBoardNumbers board = map (\(sq, n) -> validSquareNumbers (sq, n) board) boa
 -- which occur more than once (i.e. there are two squares conflicting over this number)
 containsNoSingleDuplicates :: [String] ->  [(String, [Int])] -> Bool
 containsNoSingleDuplicates unit board = (length . removeDuplicates) xss == length xss where
-  xss = filter (\xs -> length xs == 1) (lookups unit board)
+  xss = filter ((== 1) . length) (lookups unit board)
 
 -- we can check if there is a possibility to insert every number in at least one square,
 -- by concatenating the validBoardNumbers and checking if every number [1..size] is contained in that list.
 -- We also check that there are no single-element duplicate lists, i.e. direct conflicts.
 validUnit :: [String] -> [(String, [Int])] -> Bool
-validUnit unit board = containsNoSingleDuplicates unit board && all (`elem` (concat (lookups unit board))) [1..size] where
-    size = (sqrtInt . length) board
+validUnit unit validBoardNbrs = containsNoSingleDuplicates unit validBoardNbrs && all (`elem` validUnitNumbers) [1..size] where
+    validUnitNumbers = concat (lookups unit validBoardNbrs)
+    size = length unit
 
 -- to check if every unit is valid, we can simply apply the validUnit function to every unit in the unitList,
 -- and return true iff. all units are valid for a given board.
@@ -211,26 +209,15 @@ giveMeANumber = do
 count :: Eq a => a -> [a] -> Int
 count x = length . filter (== x)
 
--- helper function. takes a unit of (square, val)-tuples as input, returns the squares that have direct conflicts (i.e. the same val)
--- 0 is considered an empty square, and so is omitted.
-unitConflicts :: [(String, Int)] -> [String]
-unitConflicts unit = map fst (filter (\(sq, val) -> (count val (map snd unit)) > 1 && val /= 0) unit)
-
--- helper function. gets the (square, val) pairs in a given unit from a given board, essentially
--- a "lookups" for tuples.
-filterUnit :: [String] -> [(String, Int)] -> [(String, Int)]
-filterUnit unit board = filter (\(sq, val) -> sq `elem` unit) board
-
--- helper function. for a given board, assembles a list of lists, where every sub-list is a collection of
--- (square, val) tuples, representing a unit.
-unitVals :: [(String, Int)] -> [[(String, Int)]]
-unitVals board = map (\u -> (filterUnit u board)) (unitList size) where
-  size = (floor . sqrt . fromIntegral . length) board
-
--- finally, we apply the unitConflicts function over every sub-list in unitVals.
--- concatenating this gives us a list of every conflicting square on the board.
-boardConflicts :: [(String, Int)] -> [String]
-boardConflicts board = concat (map unitConflicts (unitVals board))
+-- returns every square on the board that is in direct conflict with another square
+-- i.e. every square where, for all its valid numbers, that number is occupied by one of its peers.
+-- extracts every (square, values) tuple from the validBoardNumbers, and checks if all numbers in 'values'
+-- are contained in the peers' values list (using lookups to get all the peer values, and getPeers
+-- to get the peer list for that square)
+conflictingSquares :: [(String, Int)] -> [String]
+conflictingSquares board = map fst blockedTuples where
+        blockedTuples = filter (\(sq, values) -> (all (`elem` lookups (getPeers size sq) board)) values) (validBoardNumbers board)
+        size = (sqrtInt . length) board
 
 -- prints a sudoku board row by row into a table-like structure.
 -- first calculates the dimensions ('size') of the board, 
@@ -238,24 +225,25 @@ boardConflicts board = concat (map unitConflicts (unitVals board))
 -- finally, prints each row line by line.
 printSudoku :: [(String, Int)] -> IO ()
 printSudoku board = do
-  let size =  (floor . sqrt . fromIntegral . length) board
-      boxSize = (floor . sqrt . fromIntegral) size
+  let size =  (sqrtInt . length) board
+      boxSize = sqrtInt size
       vals = map snd board
       rows = map (concatMap show) (splitEvery size vals)
+      delimiters = map (splitEvery boxSize) rows
+      prettyRows = map (\xs -> concatMap (++ "|") (init xs) ++ last xs) delimiters
 
       validNbrs = validBoardNumbers board
-      blockedSquares = map fst blockedTuples where
-        blockedTuples = filter (\(sq, values) -> (all (\v -> v `elem` peerValues)) values) validNbrs
-        peerValues = lookups (getPeers size sq) board
+      conflicts = conflictingSquares board
 
       blockedUnits = filter (\u -> not (validUnit u validNbrs)) (unitList size)
-      
   putStrLn "---------"
-  mapM_ putStrLn rows
-  if blockedSquares == [] then
-    putStrLn "Conflicting or blocked squares: None found" else putStrLn ("Conflicting or blocked squares: " ++ (show blockedSquares))
-  if blockedUnits == [] then
-    putStrLn "Conflicting units: None found" else putStrLn ("Conflicting or blocked units: " ++ (show blockedUnits))
+  mapM_ putStrLn prettyRows
+  if conflicts /= [] then
+    putStrLn ("Conflicting squares: " ++ (show conflicts)) else return ()
+  if blockedUnits /= [] then
+    putStrLn ("Blocked units: " ++ (show blockedUnits)) else return ()
+  if conflicts == [] && blockedUnits == [] then
+    putStrLn "Valid sudoku!" else return ()
   
 
 -- helper function to parse sudokus from file input. 
@@ -269,12 +257,10 @@ splitString sep (x:xs)
 
 main :: IO ()
 main = do
-    file <- readFile testFile
+    putStrLn "Enter file name: "
+    file <- getLine >>= readFile
     let raw = (filter (/= '\n') file)
         sudokuList = filter (/= "") (splitString '=' raw)
         sudokuBoards = map parseBoard sudokuList
 
-        verified = map (show . verifySudoku) sudokuList
-
-    mapM_ putStrLn verified
     mapM_ printSudoku sudokuBoards
