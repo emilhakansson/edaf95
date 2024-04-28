@@ -3,7 +3,7 @@
 module Sudoku where
 
 import Data.Char
---import System.Random
+import System.Random
 
 rowString = "ABCDEFGHI"
 colString = "123456789"
@@ -195,7 +195,7 @@ verifySudoku :: String -> Bool
 verifySudoku = validUnits . validBoardNumbers . parseBoard
 
 -- Lab 3
- {-
+ 
 giveMeANumber :: IO ()
 giveMeANumber = do 
   lowerStr <- getLine
@@ -204,12 +204,8 @@ giveMeANumber = do
   let upper = read upperStr :: Int
   rnd <- randomRIO (lower, upper)
   putStrLn (show rnd)
--}
--- helper function. returns the number of elements 'x' in xs.
-count :: Eq a => a -> [a] -> Int
-count x = length . filter (== x)
 
--- returns every square on the board that is in direct conflict with another square
+-- returns every square on the board that is in direct conflict with another square,
 -- i.e. every square where, for all its valid numbers, that number is occupied by one of its peers.
 -- extracts every (square, values) tuple from the validBoardNumbers, and checks if all numbers in 'values'
 -- are contained in the peers' values list (using lookups to get all the peer values, and getPeers
@@ -220,8 +216,10 @@ conflictingSquares board = map fst blockedTuples where
         size = (sqrtInt . length) board
 
 -- prints a sudoku board row by row into a table-like structure.
--- first calculates the dimensions ('size') of the board, 
--- then converts the values into strings and splits them into chunks (rows) of length 'size'.
+-- first calculates the dimensions ('size') of the board, then converts the values 
+-- into strings and splits them into chunks (rows) of length 'size'. each row is then split into
+-- sub-lists of boxSize length, and vertical delimiters are added to each box ("|") for readability.
+-- also adds (using zipWith) row and column variables to the edges of the table, that adapt to the board's size.
 -- finally, prints each row line by line.
 printSudoku :: [(String, Int)] -> IO ()
 printSudoku board = do
@@ -229,19 +227,17 @@ printSudoku board = do
       boxSize = sqrtInt size
       vals = map snd board
       rows = map (concatMap show) (splitEvery size vals)
-      delimiters = map (splitEvery boxSize) rows
-      prettyRows = map (\xs -> concatMap (++ "|") (init xs) ++ last xs) delimiters
-      prettierRows = zipWith (++) (map ((++ "  ") . show) [1..size]) prettyRows
+      boxes = map (splitEvery boxSize) rows
+      delimiters = map (\xs -> concatMap (++ "|") (init xs) ++ last xs) boxes
+      prettyRows = zipWith (++) (map ((++ "  ") . show) [1..size]) delimiters
 
       validNbrs = validBoardNumbers board
       conflicts = conflictingSquares board
       blockedUnits = filter (\u -> not (validUnit u validNbrs)) (unitList size)
 
-      
-
   putStrLn "---------------"
   putStrLn ("   " ++ (concatMap (++ " ") (splitEvery boxSize (take size "ABCDEFGHI"))))
-  mapM_ putStrLn prettierRows
+  mapM_ putStrLn prettyRows
   if conflicts /= [] then
     putStrLn ("Conflicting squares: " ++ (show conflicts)) else return ()
   if blockedUnits /= [] then
@@ -259,12 +255,17 @@ splitString sep (x:xs)
   | x == sep = "" : (splitString sep xs)
   | otherwise = (x : head (splitString sep xs)) : tail (splitString sep xs)
 
+-- reads a file name from user input, then pretty prints the sudoku boards in that file,
+-- one by one. invalid squares or blocked units are printed below the sudoku board.
 main :: IO ()
 main = do
-    putStrLn "Enter file name: "
-    file <- getLine >>= readFile
+  putStrLn "Enter file name (type 'quit' to exit): "
+  input <- getLine
+  if (input == "quit") then return () else do
+    file <- readFile input
     let raw = (filter (/= '\n') file)
         sudokuList = filter (/= "") (splitString '=' raw)
         sudokuBoards = map parseBoard sudokuList
 
     mapM_ printSudoku sudokuBoards
+    main
