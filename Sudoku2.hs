@@ -3,7 +3,7 @@
 module Sudoku where
 
 import Data.Char
-import System.Random
+--import System.Random
 
 rowString = "ABCDEFGHI"
 colString = "123456789"
@@ -195,7 +195,7 @@ verifySudoku :: String -> Bool
 verifySudoku = validUnits . validBoardNumbers . parseBoard
 
 -- Lab 3
- 
+ {-
 giveMeANumber :: IO ()
 giveMeANumber = do 
   lowerStr <- getLine
@@ -204,7 +204,7 @@ giveMeANumber = do
   let upper = read upperStr :: Int
   rnd <- randomRIO (lower, upper)
   putStrLn (show rnd)
-
+-}
 -- returns every square on the board that is in direct conflict with another square,
 -- i.e. every square where, for all its valid numbers, that number is occupied by one of its peers.
 -- extracts every (square, values) tuple from the validBoardNumbers, and checks if all numbers in 'values'
