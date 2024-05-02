@@ -40,17 +40,14 @@ emptyBoard = zip squares infAllDigits
 fullBoard :: Board
 fullBoard = [("A1", [1, 2]), ("A2", [2]), ("A3", [3]), ("A4", [4])]
 
-{-
 parseSquare :: (String, Char) -> Board -> Maybe Board
 parseSquare (s, x) values
   | x == '.' || x == '0' = return values
   | isDigit x = assign (digitToInt x) s values
   | otherwise = fail "not a valid grid"
 
-
 parseBoard :: String -> Maybe Board
 parseBoard = foldr ((=<<) . parseSquare) (Just emptyBoard) . zip squares
--}
 
 map2 :: (a -> c, b -> d) -> (a, b) -> (c, d)
 map2 (f1,f2) (a,b) = (f1 a, f2 b)
