@@ -102,11 +102,17 @@ recursiveReplacement _ [] zs = Just zs -- Nothing to replace? Just zs.
 recursiveReplacement [] _ zs = Just zs
 recursiveReplacement (x:xs) (y:ys) zs = tryReplace x y zs >>= recursiveReplacement xs ys
 
+-- Sets the valid numbers for a given square to a single element list containing only the given value.
+-- Returns a board with the valid numbers set to val.
 setValue :: Int -> String -> Board -> Board
-setValue val sq board = mapIf (\(square, vals) -> (square, [val])) (\(square, vals) -> square == sq) board
+setValue val sq = mapIf (\(square, vals) -> (square, [val])) (\(square, vals) -> square == sq)
 
+-- Takes a value and square, and removes the value from that square's list of valid numbers.
+-- Returns a Board with the value removed from the given square's valid numbers.
+-- map2 maps id to sq, and filter (/= val) to the number list, leaving sq unchanged and removing val from the list of values.
+-- mapIf maps this pair of functions to the board, only applying if square == sq.
 eliminateValue :: Int -> String -> Board -> Board
-eliminateValue val sq board = mapIf (\(square, vals) -> (square, filter (/= val) vals)) (\(square, vals) -> square == sq) board
+eliminateValue val sq = mapIf (map2 (id, filter (/= val))) (\(square, vals) -> square == sq)
 
 eliminate :: Int -> String -> Board -> Maybe Board
 eliminate val sq board
