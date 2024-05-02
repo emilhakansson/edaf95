@@ -87,8 +87,8 @@ tryReplace y y' (x:xs)
   | x == y = Just (y':xs)
   | otherwise = fmap (x:) $ tryReplace y y' xs
 
-doIt = Just [1,2,3] `maybeBind` tryReplace 1 3 `maybeBind`
-    tryReplace 3 2 `maybeBind` tryReplace 2 1
+doIt = Just [1,2,3] >>= tryReplace 1 3 >>=
+    tryReplace 3 2 >>= tryReplace 2 1
 
 -- Takes the first element in xs, looks for the first occurence of it in zs, and tries to replace it with y.
 -- Returns a Maybe [a], which can be passed to the >>= operator, along with a function of type ([a] -> Maybe [a]).
