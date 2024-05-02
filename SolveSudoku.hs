@@ -54,9 +54,9 @@ map2 (f1,f2) (a,b) = (f1 a, f2 b)
 
 mapIf :: (a -> a) -> (a -> Bool) -> [a] -> [a]
 mapIf _ _ [] = []
-mapIf f1 pred (x:xs)
-  | pred x         = f1 x : mapIf f1 pred xs
-  | otherwise    = x: mapIf f1 pred xs
+mapIf f pred (x:xs)
+  | pred x    = f x : mapIf f pred xs
+  | otherwise = x: mapIf f pred xs
 
 maybeOr :: Maybe a -> Maybe a -> Maybe a
 maybeOr m1 m2
@@ -90,13 +90,17 @@ tryReplace y y' (x:xs)
 doIt = Just [1,2,3] `maybeBind` tryReplace 1 3 `maybeBind`
     tryReplace 3 2 `maybeBind` tryReplace 2 1
 
+-- Takes the first element in xs, looks for the first occurence of it in zs, and tries to replace it with y.
+-- Returns a Maybe [a], which can be passed to the >>= operator, along with a function of type ([a] -> Maybe [a]).
+-- "recursiveReplacement xs ys" itself is a partially applied function, and has exactly the return type ([a] -> Maybe [a]),
+-- so it can be passed to >>=, repeating the tryReplace with the next values of x and y.
+-- Example: recursiveReplacement [1,2,3] [4,3,2] [2,3,1] first replaces 1 with 4: [2,3,4],
+-- then replaces 2 with 3: [3,3,4], and finally 3 with 2: [2,3,4].
 recursiveReplacement :: Eq a => [a] -> [a] -> [a] -> Maybe [a]
-recursiveReplacement _ _ [] = Nothing -- Empty list? Return Nothing
-recursiveReplacement _ [] zs = Just zs -- Nothing to replace? Just zs
+recursiveReplacement _ _ []  = Nothing -- Empty list? Return Nothing
+recursiveReplacement _ [] zs = Just zs -- Nothing to replace? Just zs.
 recursiveReplacement [] _ zs = Just zs
-recursiveReplacement (x:xs) (y:ys) (z:zs)
-  | z == x = (recursiveReplacement xs ys (z:zs)) `maybeBind` tryReplace x y
-  | otherwise = fmap (z:) (recursiveReplacement (x:xs) (y:ys) zs)
+recursiveReplacement (x:xs) (y:ys) zs = tryReplace x y zs >>= recursiveReplacement xs ys
 
 setValue :: Int -> String -> Board -> Board
 setValue val sq board = mapIf (\(square, vals) -> (square, [val])) (\(square, vals) -> square == sq) board
