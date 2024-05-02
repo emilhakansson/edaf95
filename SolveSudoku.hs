@@ -37,6 +37,9 @@ allDigits = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 infAllDigits = repeat allDigits
 emptyBoard = zip squares infAllDigits
 
+fullBoard :: Board
+fullBoard = [("A1", [1, 2]), ("A2", [2]), ("A3", [3]), ("A4", [4])]
+
 {-
 parseSquare :: (String, Char) -> Board -> Maybe Board
 parseSquare (s, x) values
@@ -67,8 +70,8 @@ maybeOr m1 m2
 firstJust :: [Maybe a] -> Maybe a
 firstJust [] = Nothing
 firstJust (x:xs)
-  | isJust x        = x
-  | otherwise       = firstJust xs
+  | isJust x  = x
+  | otherwise = firstJust xs
 
 lookupList :: Eq a => a -> [(a, [b])] -> [b]
 lookupList _ [] = []
@@ -79,12 +82,12 @@ lookupList y ((a, bList): rest)
 maybeBind :: Maybe a -> (a -> Maybe b) -> Maybe b
 maybeBind x f
   | isNothing x = Nothing
-  | otherwise = f (fromJust x)
+  | otherwise   = f (fromJust x)
 
 tryReplace :: Eq a => a -> a -> [a] -> Maybe [a]
 tryReplace _ _ [] = Nothing
 tryReplace y y' (x:xs)
-  | x == y = Just (y':xs)
+  | x == y    = Just (y':xs)
   | otherwise = fmap (x:) $ tryReplace y y' xs
 
 doIt = Just [1,2,3] >>= tryReplace 1 3 >>=
@@ -116,15 +119,25 @@ eliminateValue val sq = mapIf (map2 (id, filter (/= val))) (\(square, vals) -> s
 
 eliminate :: Int -> String -> Board -> Maybe Board
 eliminate val sq board
-  | length (lookupList sq board) == 1 && (head . fromJust) (lookup sq board) == val = Nothing
+  | length vals == 1 && head vals == val = Nothing
   | lookupList sq board == [] = Nothing
-  | otherwise = Just (eliminateValue val sq board)
+  | otherwise = Just (eliminateValue val sq board) where
+    vals = lookupList sq board
 
+-- Assigns a square in the board a given value, and eliminates that value from its peers.
+-- With bind, this can be chained to fill any number of squares. This fills the first box with numbers 1-9:
+--  assign 1 "A1" emptyBoard >>= assign 2 "A2" >>= assign 3 "A3" >>= 
+--  assign 4 "B1" >>= assign 5 "B2" >>= assign 6 "B3" >>= 
+--  assign 7 "C1" >>= assign 8 "C2" >>= assign 9 "C3"
 assign :: Int -> String -> Board -> Maybe Board
-assign val sq board = assign' val sq (setValue val sq board)
+assign val sq board = assign' val peerList (setValue val sq board) where
+  peerList = lookupList sq peers
 
-assign' :: Int -> String -> Board -> Maybe Board
-assign' val sq (b:board)
-  | (fst b) `elem` peerList = eliminate val (fst b) board `maybeBind` assign' val sq
-  | otherwise = fmap (b:) (assign' val sq board) where
-    peerList = lookupList sq peers
+-- Helper function that takes 3 parameters: a value to eliminate, the peer list of a square, and a board.
+-- Recursively eliminates the given value for each square in the peer list.
+-- Returns "Just board" with the given value eliminated from each square in the peer list. 
+-- Returns Nothing if the elimination would fail.
+assign' :: Int -> [String] -> Board -> Maybe Board
+assign' _ _ [] = Nothing -- If no valid board, return Nothing
+assign' val [] board = Just board  -- Base case: if peerList is empty, return Just board
+assign' val (p:peerList) board = eliminate val p board >>= assign' val peerList
