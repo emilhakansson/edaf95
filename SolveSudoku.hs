@@ -1,3 +1,5 @@
+-- Author: Emil Håkansson, Felicia Huynh
+
 module SolveSudoku where
 
 -- by Adrian Roth
@@ -20,6 +22,7 @@ cols = concat colBoxes
 
 squares :: [String]
 squares = cross rows cols
+
 unitlist :: [[String]]
 unitlist = [cross rows [c] | c <- cols]
         ++ [cross [r] cols | r <- rows]
@@ -142,3 +145,13 @@ assign' :: Int -> [String] -> Board -> Maybe Board
 assign' _ _ [] = Nothing -- If no valid board, return Nothing
 assign' val [] board = Just board  -- Base case: if peerList is empty, return Just board
 assign' val (p:peerList) board = eliminate val p board >>= assign' val peerList
+
+-- Hint: use map, bind, assign, firstJust, lookupList
+-- lookupList sq board = validNbrs
+-- map -> assign -> 
+solveSudoku' :: [String] -> Board -> Maybe Board
+solveSudoku' [] board = Just board
+solveSudoku' (sq:sqs) board = firstJust (map (\v -> assign v sq board >>= (solveSudoku' sqs)) (lookupList sq board))
+
+solveSudoku :: String -> Maybe Board
+solveSudoku str = solveSudoku' squares (fromJust (parseBoard str))
