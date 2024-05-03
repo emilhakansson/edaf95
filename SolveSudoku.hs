@@ -154,4 +154,6 @@ solveSudoku' [] board = Just board
 solveSudoku' (sq:sqs) board = firstJust (map (\v -> assign v sq board >>= (solveSudoku' sqs)) (lookupList sq board))
 
 solveSudoku :: String -> Maybe Board
-solveSudoku str = solveSudoku' squares (fromJust (parseBoard str))
+solveSudoku str = case parseBoard str of
+  Nothing -> Nothing 
+  Just board -> solveSudoku' squares board
