@@ -114,14 +114,18 @@ setValue val sq = mapIf (\(square, vals) -> (square, [val])) (\(square, vals) ->
 eliminateValue :: Int -> String -> Board -> Board
 eliminateValue val sq = mapIf (map2 (id, filter (/= val))) (\(square, vals) -> square == sq)
 
+-- Works similar to eliminateValue, but has the return type Maybe Board.
+-- Returns Nothing if the elimination would result in an invalid board. 
+-- Otherwise, it returns Just board with the given value eliminated.
 eliminate :: Int -> String -> Board -> Maybe Board
 eliminate val sq board
-  | length vals == 1 && head vals == val = Nothing
-  | lookupList sq board == [] = Nothing
-  | otherwise = Just (eliminateValue val sq board) where
+  | vals == [val] = Nothing
+  | vals == []    = Nothing
+  | otherwise     = Just (eliminateValue val sq board) where
     vals = lookupList sq board
 
 -- Assigns a square in the board a given value, and eliminates that value from its peers.
+-- Returns Nothing if the assignment results in an invalid board, otherwise returns Just board with the given assignment.
 -- With bind, this can be chained to fill any number of squares. This fills the first box with numbers 1-9:
 --  assign 1 "A1" emptyBoard >>= assign 2 "A2" >>= assign 3 "A3" >>= 
 --  assign 4 "B1" >>= assign 5 "B2" >>= assign 6 "B3" >>= 
