@@ -2,17 +2,11 @@
 
 module Sudoku where
 
-import Data.Char
-
 -- How to run:
--- 1. Change the constant "testFile" to change which file should be verified. (easy50.txt, inconsistent20.txt, conflicts.txt, blockings.txt)
--- 2. run 'ghci'
--- 3. Load the module: ':load VerifySudoku.hs'
--- 4. run the main function: 'main'
-
--- change this to change which file to verify.
-testFile :: String
-testFile = "easy50.txt"
+-- 1. run 'ghci'
+-- 2. Load the module: ':load VerifySudoku.hs'
+-- 3. run the main function: 'main'
+-- 4. Enter the file name to verify (easy50.txt, inconsistent20.txt, blockings.txt, conflicts.txt)
 
 rowString = "ABCDEFGHI"
 colString = "123456789"
@@ -52,15 +46,16 @@ squareStrings size = cross rows_ cols_ where
 
 -- takes the String input and converts it into a sudoku board list
 -- 1: replacePointsWithZeros in the input string.
--- 2: convert digits to Ints (map digitToInt)
+-- 2: convert digits to Ints (map (read . (:"")))
 -- 3: zip sqStrings with the resulting list
 -- the result is a list of tuples, where the n:th square string is paired with the n:th digit in the input string.
 -- works for variable sizes of sudoku boards, up to 9x9.
 parseBoard :: String -> [(String, Int)]
-parseBoard str = zip sqStrings (map digitToInt (replacePointsWithZeros str)) where
+parseBoard str = zip sqStrings digits where
   sqStrings = cross rows_ cols_
   rows_ = take ((sqrtInt . length) str) rowString
   cols_ = take ((sqrtInt . length) str) colString
+  digits = map (read . (:"")) $ replacePointsWithZeros str :: [Int]
 
 -- a list of lists, where each list is composed of all squares in a row, column, or box in the board.
 unitList :: Int -> [[String]]
@@ -213,10 +208,12 @@ splitString sep (x:xs)
 
 main :: IO ()
 main = do
-    file <- readFile testFile
+  putStrLn "Enter file name (type 'quit' to exit): "
+  input <- getLine
+  if input == "quit" then return () else do
+    file <- readFile input
     let raw = filter (/= '\n') file
         sudokuList = filter (/= "") (splitString '=' raw)
-
         verified = map (show . verifySudoku) sudokuList
-
     mapM_ putStrLn verified
+    main
