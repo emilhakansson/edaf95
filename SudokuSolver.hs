@@ -9,7 +9,13 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import Data.List (intersperse)
-import Data.List.Split
+--import Data.List.Split
+
+splitEvery ::  Int -> [a] -> [[a]]
+splitEvery n [] = []
+splitEvery n xs
+  | length xs <= n = [xs]
+  | otherwise = take n xs : splitEvery n (drop n xs)
 
 cross :: [a] -> [a] -> [[a]]
 cross s1 s2 = [[r, c] | r <- s1, c <- s2]
@@ -174,18 +180,67 @@ printSudoku :: String -> IO ()
 printSudoku str = do
   let sep = "==========="
       delim = "|"
-      rowIndex = concat ((intersperse delim) rowBoxes)
-      rows = chunksOf 9 str
-      prettyRows = map (concat . (intersperse delim) . (chunksOf 3)) rows
+      rowIndex = concat ((intersperse " ") rowBoxes)
+      rows = splitEvery 9 str
+      prettyRows = map (concat . (intersperse delim) . (splitEvery 3)) rows
   putStrLn sep
   putStrLn rowIndex
   mapM_ putStrLn prettyRows
+
+printBoard :: Maybe Board -> IO ()
+printBoard board = do
+  let prettyBoard = foldr ((++) . show) "" $ concatMap snd $ fromJust board
+  printSudoku prettyBoard
+
+rowNumberList :: [(String, Int)]
+rowNumberList = [("A", 0), ("B", 1), ("C", 2), ("D", 3), ("E", 4), ("F", 5), ("G", 6), ("H", 7), ("I", 8)]
+
+lookupRow :: String -> Int
+lookupRow sq = fromJust (lookup ((head sq) : "") rowNumberList)
+  
+getPos :: String -> Int
+getPos sq = ((lookupRow sq) * 9) + (read (tail sq) :: Int) - 1
       
+updateSquare :: Char -> String -> String -> String
+updateSquare val sq sudoku = replace (getPos sq) val sudoku
+
+replace :: Int -> Char -> String
+replace i r s = [if j == i then r else c | (j, c) <- zip [0..] s]
+
 -- TODO: user input, solve sudoku, assign value.
 
 main :: IO ()
 main = do
     putStrLn "Enter file name:"
     sudokuStrings <- getLine >>= readFile >>= parseFile
-    let boardList = map parseBoard sudokuStrings
-    mapM_ printSudoku sudokuStrings
+    let sudokuBoards = map solveSudoku sudokuStrings
+    putStrLn "1. Solve this sudoku\n2. Solve all sudokus in this file.\n3. Assign a value to a square"
+    input <- getLine
+    if (input == "1") then do
+      let solvedBoard = solveSudoku $ head sudokuStrings
+          solvedNbrs = foldr ((++) . show) "" $ concatMap snd $ fromJust solvedBoard
+      printSudoku solvedNbrs
+    else if (input == "2") then do
+      let solvedSudokus = map (fromJust . solveSudoku) sudokuStrings
+          solvedNbrs = (map . concatMap) snd solvedSudokus
+          solvedStrings = map (foldr ((++) . show) "") solvedNbrs
+      mapM_ printSudoku solvedStrings 
+    else if (input == "3") then do
+      putStrLn "Enter square and value: "
+      input <- getLine
+      let sqval = (filter (/= "") . (splitString ' ')) input
+          sq = head sqval
+          val = (last . last) sqval
+          currentSudoku = head sudokuStrings
+
+          --assignedBoard = assign val sq $ fromJust . head $ sudokuBoards
+
+
+      print sq
+      print val
+      printSudoku (updateSquare val sq (head sudokuStrings))
+      
+    else return ()
+
+    --let boardList = map parseBoard sudokuStrings
+    --mapM_ printSudoku sudokuStrings
