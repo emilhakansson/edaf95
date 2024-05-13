@@ -1,11 +1,17 @@
+-- Interactive Sudoku solver
 -- Author: Emil Håkansson, Felicia Huynh
 
 -- How to use:
 -- 1. Open ghci
 -- 2. Load the module: ':load SudokuSolver.hs'
 -- 3. Run the main function: 'main'
--- 5. Type the name of the text file to solve.
--- 4. Follow the instructions on screen.
+-- 4. Type the name of the text file to solve. For example, 'easy50.txt'.
+-- 5a. Type a number to choose the corresponding option on screen.
+-- 5b. Follow the instructions on screen. 
+-- 5c. In order to solve a sudoku interactively, type 3. Then enter a square and a value in the correct format.
+-- For example, type 'A1 4' to assign a 4 to the square A1. The program will give a warning if the assignment 
+-- results in an invalid sudoku. Otherwise, it prints the resulting board and allows the user to continue.
+-- Type 'solve' to automatically solve the current sudoku and return to the list of options.
 
 module SudokuSolver where
 
@@ -15,13 +21,7 @@ import Data.Bool
 import Data.Char
 import Data.List
 import Data.Maybe
-import Data.List (intersperse)
-
-fromMaybe :: a -> Maybe a -> a
-fromMaybe defaultVal maybeVal =
-  case maybeVal of
-    Just val -> val
-    Nothing -> defaultVal
+import Control.Concurrent
 
 splitEvery ::  Int -> [a] -> [[a]]
 splitEvery n [] = []
@@ -60,9 +60,6 @@ allDigits = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 infAllDigits = repeat allDigits
 emptyBoard = zip squares infAllDigits
 
-fullBoard :: Board
-fullBoard = [("A1", [1, 2]), ("A2", [2]), ("A3", [3]), ("A4", [4])]
-
 parseSquare :: (String, Char) -> Board -> Maybe Board
 parseSquare (s, x) values
   | x == '.' || x == '0' = return values
@@ -79,13 +76,7 @@ mapIf :: (a -> a) -> (a -> Bool) -> [a] -> [a]
 mapIf _ _ [] = []
 mapIf f pred (x:xs)
   | pred x    = f x : mapIf f pred xs
-  | otherwise = x: mapIf f pred xs
-
-maybeOr :: Maybe a -> Maybe a -> Maybe a
-maybeOr m1 m2
-  | isJust m1 = m1
-  | isJust m2 = m2
-  | otherwise = Nothing
+  | otherwise = x : mapIf f pred xs
 
 firstJust :: [Maybe a] -> Maybe a
 firstJust [] = Nothing
@@ -98,32 +89,6 @@ lookupList _ [] = []
 lookupList y ((a, bList): rest)
   | y == a    = bList
   | otherwise = lookupList y rest
-
-maybeBind :: Maybe a -> (a -> Maybe b) -> Maybe b
-maybeBind x f
-  | isNothing x = Nothing
-  | otherwise   = f (fromJust x)
-
-tryReplace :: Eq a => a -> a -> [a] -> Maybe [a]
-tryReplace _ _ [] = Nothing
-tryReplace y y' (x:xs)
-  | x == y    = Just (y':xs)
-  | otherwise = fmap (x:) $ tryReplace y y' xs
-
-doIt = Just [1,2,3] >>= tryReplace 1 3 >>=
-    tryReplace 3 2 >>= tryReplace 2 1
-
--- Takes the first element in xs, looks for the first occurence of it in zs, and tries to replace it with y.
--- Returns a Maybe [a], which can be passed to the >>= operator, along with a function of type ([a] -> Maybe [a]).
--- "recursiveReplacement xs ys" itself is a partially applied function, and has exactly the return type ([a] -> Maybe [a]),
--- so it can be passed to >>=, repeating the tryReplace with the next values of x and y.
--- Example: recursiveReplacement [1,2,3] [4,3,2] [2,3,1] first replaces 1 with 4: [2,3,4],
--- then replaces 2 with 3: [3,3,4], and finally 3 with 2: [2,3,4].
-recursiveReplacement :: Eq a => [a] -> [a] -> [a] -> Maybe [a]
-recursiveReplacement _ _ []  = Nothing -- Empty list? Return Nothing
-recursiveReplacement _ [] zs = Just zs -- Nothing to replace? Just zs.
-recursiveReplacement [] _ zs = Just zs
-recursiveReplacement (x:xs) (y:ys) zs = tryReplace x y zs >>= recursiveReplacement xs ys
 
 -- Sets the valid numbers for a given square to a single element list containing only the given value.
 -- Returns a board with the valid numbers set to val.
@@ -143,7 +108,7 @@ eliminateValue val sq = mapIf (map2 (id, filter (/= val))) (\(square, vals) -> s
 eliminate :: Int -> String -> Board -> Maybe Board
 eliminate val sq board
   | vals == [val] = Nothing
-  | vals == []    = Nothing
+  | null vals     = Nothing
   | otherwise     = Just (eliminateValue val sq board) where
     vals = lookupList sq board
 
@@ -185,95 +150,106 @@ parseFile :: String -> IO [String]
 parseFile contents = do
   return $ (filter (/= "") . splitString '=' . filter (/= '\n')) contents
 
+boardString :: Board -> String
+boardString = concatMap show . concatMap snd
+
 printSudoku :: String -> IO ()
 printSudoku str = do
   let sep = "==========="
       delim = "|"
-      rowIndex = concat ((intersperse " ") rowBoxes)
+      rowIndex = unwords rowBoxes
       rows = splitEvery 9 str
-      prettyRows = map (concat . (intersperse delim) . (splitEvery 3)) rows
-  putStrLn sep
+      prettyRows = map (intercalate delim . splitEvery 3) rows
   putStrLn rowIndex
   mapM_ putStrLn prettyRows
+  putStrLn sep
 
 printBoard :: Maybe Board -> IO ()
-printBoard board = do
-  let prettyBoard = concatMap show $ concatMap snd $ fromJust board
-  printSudoku prettyBoard
+printBoard board = case board of
+  Nothing -> putStrLn "Invalid sudoku! No solution possible."
+  Just b -> do
+    putStrLn "Solution found: "
+    printSudoku $ boardString b
 
 colIndices :: [(String, Int)]
 colIndices = [("A", 0), ("B", 1), ("C", 2), ("D", 3), ("E", 4), ("F", 5), ("G", 6), ("H", 7), ("I", 8)]
 
-lookupCol :: String -> Int
-lookupCol sq = fromJust (lookup ((head sq) : "") colIndices)
+lookupCol :: String -> Maybe Int
+lookupCol sq = lookup [head sq] colIndices
   
-getPos :: String -> Int
-getPos sq = (lookupCol sq) + (read (tail sq) :: Int) * 9 - 9
-      
-updateSquare :: Char -> String -> String -> String
-updateSquare val sq sudoku = replace (getPos sq) val sudoku
+getPos :: String -> Maybe Int
+getPos sq = case lookupCol sq of 
+  Nothing -> Nothing
+  Just col -> Just $ col + (read (tail sq) :: Int) * 9 - 9
+
+updateSquare :: String -> Char -> String -> Maybe String
+updateSquare sq val sudoku = case getPos sq of
+  Nothing -> Nothing
+  Just p -> if p > (length sudoku - 1) then Nothing 
+            else Just $ replace p val sudoku
 
 replace :: Int -> Char -> String -> String
 replace i r s = [if j == i then r else c | (j, c) <- zip [0..] s]
 
-interactiveSolve :: [String] -> Maybe Board -> IO ()
-interactiveSolve sudokuStrings currentBoard = do
-  let sudokuBoards = map solveSudoku sudokuStrings
-  putStrLn "Type 'solve' to solve automatically, or enter square and value: "
+interactiveSolve :: [String] -> IO ()
+interactiveSolve (current:rest) = do
+  putStrLn "Type 'solve' to solve this sudoku automatically, or enter a square and value: "
   input <- getLine
-  if input == "solve" then do
-    let solvedBoard = solveSudoku $ head sudokuStrings
-        solvedNbrs = concatMap show $ concatMap snd $ fromJust solvedBoard
-    printSudoku solvedNbrs
-    loop $ tail sudokuStrings
-  else do
-    let sqval = (filter (/= "") . (splitString ' ')) input
-        sq = head sqval
-        val = (last . last) sqval
-        valInt = read [val] :: Int
-        currentSudoku = head sudokuStrings
-        assignedSudoku = updateSquare val sq currentSudoku
-    case solveSudoku assignedSudoku of
-      Nothing -> do 
-        print "Invalid"
-        interactiveSolve (currentSudoku : (tail sudokuStrings)) currentBoard
-      Just x -> do 
-        let assignedBoard = assign valInt sq $ fromJust . head $ sudokuBoards
-        printSudoku (updateSquare val sq (head sudokuStrings))
-        case assignedBoard of
-          Nothing -> print "Invalid"
-          Just x -> print "Valid"
-        interactiveSolve (assignedSudoku : (tail sudokuStrings)) assignedBoard
+  case input of
+    "quit"  -> return ()
+    "solve" -> do
+      printBoard $ solveSudoku current
+      threadDelay 1000000
+      loop rest
+    _ -> do
+      let assignment = (filter (/= "") . (splitString ' ')) input
+          (sq, val) = (head assignment, (last . last) assignment)
+          assignedSudoku = updateSquare sq val current
+      case assignedSudoku >>= solveSudoku of
+        Nothing -> do
+          putStrLn "Invalid assignment. No change was made."
+          printSudoku current
+          threadDelay 1000000
+          interactiveSolve (current:rest)
+        solved -> do
+          let s = fromJust assignedSudoku
+          if (parseBoard s == solved) then do
+            putStrLn "Solved!"
+            loop rest
+          else do
+            putStrLn ("Valid assignment: " ++ sq ++ " " ++ [val])
+            printSudoku s
+            threadDelay 1000000
+            interactiveSolve (s : rest)
 
 loop :: [String] -> IO ()
 loop [] = do
   putStrLn "Done!"
-loop sudokuStrings = do
-  putStrLn "==============\n"
-  putStrLn "1. Solve the sudoku below:"
-  printSudoku $ head sudokuStrings
-  putStrLn "\n2. Solve all sudokus in this file.\n3. Assign a value to a square"
+loop (current:rest) = do
+  putStrLn $ "==============\nDetected " ++ (show . length $ (current:rest)) ++ " sudoku left in this file."
+  putStrLn "Current sudoku:"
+  printSudoku current
+  putStrLn "1. Automatically solve the current sudoku."
+  putStrLn "2. Solve all remaining sudokus in this file."
+  putStrLn "3. Manually solve the current sudoku by assigning a value to a square."
+  putStrLn "(Type 'quit' to exit.)"
   input <- getLine
-  if input == "1" then do
-    let solvedBoard = solveSudoku $ head sudokuStrings
-    case solvedBoard of
-      Nothing -> putStrLn "Invalid sudoku!"
-      Just x -> do
-        let solvedNbrs = concatMap show $ concatMap snd $ fromJust solvedBoard
-        printSudoku solvedNbrs
-    loop $ tail sudokuStrings
-  else if input == "2" then do
-    let solvedSudokus = map solveSudoku sudokuStrings
-    mapM_ (\b -> if isJust b then do
-      let solvedSudoku = fromJust b
-          solvedNbrs = concatMap snd solvedSudoku
-          solvedString = concatMap show solvedNbrs
-      printSudoku solvedString
-      else putStrLn "Invalid sudoku!") solvedSudokus
-    
-  else if input == "3" then do
-    interactiveSolve sudokuStrings (parseBoard $ head sudokuStrings)  
-  else return ()
+  case input of
+    "1" -> do
+      printBoard $ solveSudoku current
+      threadDelay 1000000
+      loop rest
+    "2" -> do
+      let solvedSudokus = map solveSudoku (current:rest)
+      mapM_ printBoard solvedSudokus
+      putStrLn "Done!"
+    "3" -> do
+      interactiveSolve (current:rest)
+    "quit" -> return ()
+    _ -> do
+      putStrLn "Invalid command. Try again."
+      threadDelay 1000000
+      loop (current:rest)
 
 main :: IO ()
 main = do
