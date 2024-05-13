@@ -7,7 +7,7 @@
 -- 5. Type the name of the text file to solve.
 -- 4. Follow the instructions on screen.
 
-module SolveSudoku where
+module SudokuSolver where
 
 -- by Adrian Roth
 
@@ -202,7 +202,7 @@ printSudoku str = do
 
 printBoard :: Maybe Board -> IO ()
 printBoard board = do
-  let prettyBoard = foldr ((++) . show) "" $ concatMap snd $ fromJust board
+  let prettyBoard = concatMap show $ concatMap snd $ fromJust board
   printSudoku prettyBoard
 
 colIndices :: [(String, Int)]
@@ -229,7 +229,7 @@ interactiveSolve sudokuStrings currentBoard = do
   input <- getLine
   if (input == "solve") then do
     let solvedBoard = solveSudoku $ head sudokuStrings
-        solvedNbrs = foldr ((++) . show) "" $ concatMap snd $ fromJust solvedBoard
+        solvedNbrs = concatMap show $ concatMap snd $ fromJust solvedBoard
     printSudoku solvedNbrs
   else do
     let sqval = (filter (/= "") . (splitString ' ')) input
@@ -251,6 +251,8 @@ interactiveSolve sudokuStrings currentBoard = do
         interactiveSolve (assignedSudoku : (tail sudokuStrings)) assignedBoard
 
 loop :: [String] -> IO ()
+loop [] = do
+  putStrLn "Done!"
 loop sudokuStrings = do
   putStrLn "==============\n"
   putStrLn "1. Solve the sudoku below:"
@@ -259,14 +261,21 @@ loop sudokuStrings = do
   input <- getLine
   if (input == "1") then do
     let solvedBoard = solveSudoku $ head sudokuStrings
-        solvedNbrs = foldr ((++) . show) "" $ concatMap snd $ fromJust solvedBoard
-    printSudoku solvedNbrs
+    case solvedBoard of
+      Nothing -> putStrLn "Invalid sudoku!"
+      Just x -> do
+        let solvedNbrs = concatMap show $ concatMap snd $ fromJust solvedBoard
+        printSudoku solvedNbrs
     loop $ tail sudokuStrings
   else if (input == "2") then do
-    let solvedSudokus = map (fromJust . solveSudoku) sudokuStrings
-        solvedNbrs = (map . concatMap) snd solvedSudokus
-        solvedStrings = map (foldr ((++) . show) "") solvedNbrs
-    mapM_ printSudoku solvedStrings 
+    let solvedSudokus = map solveSudoku sudokuStrings
+    mapM_ (\b -> if isJust b then do
+      let solvedSudoku = fromJust b
+          solvedNbrs = concatMap snd solvedSudoku
+          solvedString = concatMap show solvedNbrs
+      printSudoku solvedString
+      else putStrLn "Invalid sudoku!") solvedSudokus
+    
   else if (input == "3") then do
     interactiveSolve sudokuStrings (parseBoard $ head sudokuStrings)  
   else return ()
