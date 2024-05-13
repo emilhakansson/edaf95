@@ -16,7 +16,6 @@ import Data.Char
 import Data.List
 import Data.Maybe
 import Data.List (intersperse)
---import Data.List.Split
 
 fromMaybe :: a -> Maybe a -> a
 fromMaybe defaultVal maybeVal =
@@ -167,9 +166,6 @@ assign' _ _ [] = Nothing -- If no valid board, return Nothing
 assign' val [] board = Just board  -- Base case: if peerList is empty, return Just board
 assign' val (p:peerList) board = eliminate val p board >>= assign' val peerList
 
--- Hint: use map, bind, assign, firstJust, lookupList
--- lookupList sq board = validNbrs
--- map -> assign -> 
 solveSudoku' :: [String] -> Board -> Maybe Board
 solveSudoku' [] board = Just board
 solveSudoku' (sq:sqs) board = firstJust (map (\v -> assign v sq board >>= (solveSudoku' sqs)) (lookupList sq board))
@@ -220,17 +216,16 @@ updateSquare val sq sudoku = replace (getPos sq) val sudoku
 replace :: Int -> Char -> String -> String
 replace i r s = [if j == i then r else c | (j, c) <- zip [0..] s]
 
--- TODO: user input, solve sudoku, assign value.
-
 interactiveSolve :: [String] -> Maybe Board -> IO ()
 interactiveSolve sudokuStrings currentBoard = do
   let sudokuBoards = map solveSudoku sudokuStrings
   putStrLn "Type 'solve' to solve automatically, or enter square and value: "
   input <- getLine
-  if (input == "solve") then do
+  if input == "solve" then do
     let solvedBoard = solveSudoku $ head sudokuStrings
         solvedNbrs = concatMap show $ concatMap snd $ fromJust solvedBoard
     printSudoku solvedNbrs
+    loop $ tail sudokuStrings
   else do
     let sqval = (filter (/= "") . (splitString ' ')) input
         sq = head sqval
@@ -238,7 +233,7 @@ interactiveSolve sudokuStrings currentBoard = do
         valInt = read [val] :: Int
         currentSudoku = head sudokuStrings
         assignedSudoku = updateSquare val sq currentSudoku
-    case (solveSudoku assignedSudoku) of
+    case solveSudoku assignedSudoku of
       Nothing -> do 
         print "Invalid"
         interactiveSolve (currentSudoku : (tail sudokuStrings)) currentBoard
@@ -259,7 +254,7 @@ loop sudokuStrings = do
   printSudoku $ head sudokuStrings
   putStrLn "\n2. Solve all sudokus in this file.\n3. Assign a value to a square"
   input <- getLine
-  if (input == "1") then do
+  if input == "1" then do
     let solvedBoard = solveSudoku $ head sudokuStrings
     case solvedBoard of
       Nothing -> putStrLn "Invalid sudoku!"
@@ -267,7 +262,7 @@ loop sudokuStrings = do
         let solvedNbrs = concatMap show $ concatMap snd $ fromJust solvedBoard
         printSudoku solvedNbrs
     loop $ tail sudokuStrings
-  else if (input == "2") then do
+  else if input == "2" then do
     let solvedSudokus = map solveSudoku sudokuStrings
     mapM_ (\b -> if isJust b then do
       let solvedSudoku = fromJust b
@@ -276,7 +271,7 @@ loop sudokuStrings = do
       printSudoku solvedString
       else putStrLn "Invalid sudoku!") solvedSudokus
     
-  else if (input == "3") then do
+  else if input == "3" then do
     interactiveSolve sudokuStrings (parseBoard $ head sudokuStrings)  
   else return ()
 
@@ -285,6 +280,3 @@ main = do
     putStrLn "Enter file name:"
     sudokuStrings <- getLine >>= readFile >>= parseFile
     loop sudokuStrings
-
-    --let boardList = map parseBoard sudokuStrings
-    --mapM_ printSudoku sudokuStrings
